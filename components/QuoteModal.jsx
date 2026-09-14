@@ -9,6 +9,8 @@ import Cta from "./Cta";
 export default function QuoteModal() {
   const { open, closeQuote } = useQuote();
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -17,6 +19,9 @@ export default function QuoteModal() {
 
   useEffect(() => {
     if (!open) return undefined;
+    setSent(false);
+    setSending(false);
+    setError("");
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKey = (event) => {
@@ -54,10 +59,39 @@ export default function QuoteModal() {
           <h3 id="quote-title">We usually respond via text within a few minutes.</h3>
           <form
             className="quote-form"
-            onSubmit={(event) => {
+            onSubmit={async (event) => {
               event.preventDefault();
-              setSent(true);
-              event.currentTarget.reset();
+              const form = event.currentTarget;
+              const fields = new FormData(form);
+              setSending(true);
+              setError("");
+              setSent(false);
+
+              try {
+                const response = await fetch("/api/quote", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    name: fields.get("name") || "",
+                    phone: fields.get("phone") || "",
+                    email: fields.get("email") || "",
+                    address: fields.get("address") || "",
+                    date: fields.get("date") || "",
+                    service: fields.get("service") || "",
+                    message: fields.get("message") || "",
+                  }),
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                  throw new Error(result.error || "Quote request could not be saved.");
+                }
+                form.reset();
+                setSent(true);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Quote request could not be saved.");
+              } finally {
+                setSending(false);
+              }
             }}
           >
             <label>
@@ -97,10 +131,11 @@ export default function QuoteModal() {
               By providing your phone number, you consent to receive transactional/informational text messages (SMS) from Martinez Painting, powered by Topline Pro. You can unsubscribe at any time by replying STOP. Message and data rates may apply. Message frequency varies. See our <Link href="/privacy">Privacy Policy</Link> and <Link href="/terms">Terms & Conditions</Link> for more details.
             </p>
             <div className="wide">
-              <Cta variant="primary" type="submit">
-                Agree & Send
+              <Cta variant="primary" type="submit" disabled={sending}>
+                {sending ? "Sending…" : "Agree & Send"}
               </Cta>
             </div>
+            {error ? <p className="wide">{error}</p> : null}
             {sent && <p className="wide">Thank you. Martinez Painting has received your request and will text you shortly.</p>}
           </form>
         </div>
